@@ -3,32 +3,6 @@
 Bot Telegram yang memantau wallet Solana tertentu dan mengirim alert saat wallet tersebut
 **membuka** atau **menutup posisi** di Meteora **DAMM v2** (program `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`).
 
-Contoh alert:
-
-```
-🟢 OPEN POSITION DAMM V2
-👛 Wallet: CUANSINO - Porto
-🏊 Pool: Tucker-SOL
-💵 Perubahan saldo:
-   -2.5574 SOL (~$188.38)
-🕐 2026-08-05 04:09:44 UTC
-🔗 GMGN.ai
-```
-
-```
-🔴 CLOSE POSITION DAMM V2
-👛 Wallet: CUANSINO - Porto
-🏊 Pool: Tucker-SOL
-💵 Perubahan saldo:
-   +167,354.0875 Tucker (~$34.89)
-   +2.2253 SOL (~$164.09)
-   💰 Total: +$198.99
-📊 PnL: 🟢 +$9.18 (+4.99%)
-   deposit $184.16 · fee $10.24
-🕐 2026-08-05 04:34:51 UTC
-🔗 GMGN.ai
-```
-
 ## Cara kerja
 
 1. **Deteksi on-chain**: setiap wallet yang ditrack didaftarkan sebagai `accountAddresses` di
