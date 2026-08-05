@@ -1,18 +1,12 @@
 import TelegramBot from "node-telegram-bot-api";
 import { config } from "../config";
 import { addWallet, removeWallet, listWallets, addChat, removeChat, listChats } from "../db";
-import { syncWebhookAddresses } from "../helius/client";
 
 export const bot = new TelegramBot(config.telegram.botToken, { polling: true });
 
 function isAllowed(msg: TelegramBot.Message): boolean {
   if (!config.telegram.adminId) return true;
   return String(msg.from?.id) === config.telegram.adminId;
-}
-
-async function syncWallets(): Promise<void> {
-  const addresses = listWallets().map((w) => w.address);
-  await syncWebhookAddresses(addresses);
 }
 
 bot.onText(/^\/start$/, (msg) => {
@@ -35,7 +29,6 @@ bot.onText(/^\/addwallet\s+(\S+)\s+(.+)$/, async (msg, match) => {
   try {
     addWallet(address, label);
     addChat(msg.chat.id);
-    await syncWallets();
     bot.sendMessage(msg.chat.id, `Wallet ditambahkan:\n${label} → ${address}`);
   } catch (err: any) {
     bot.sendMessage(msg.chat.id, `Gagal menambahkan wallet: ${err.message}`);
@@ -51,12 +44,7 @@ bot.onText(/^\/removewallet\s+(\S+)$/, async (msg, match) => {
   const address = match![1];
   const removed = removeWallet(address);
   if (!removed) return bot.sendMessage(msg.chat.id, "Wallet tidak ditemukan.");
-  try {
-    await syncWallets();
-    bot.sendMessage(msg.chat.id, `Wallet dihapus: ${address}`);
-  } catch (err: any) {
-    bot.sendMessage(msg.chat.id, `Wallet dihapus dari DB, tapi gagal sync webhook: ${err.message}`);
-  }
+  bot.sendMessage(msg.chat.id, `Wallet dihapus: ${address}`);
 });
 
 bot.onText(/^\/listwallets$/, (msg) => {

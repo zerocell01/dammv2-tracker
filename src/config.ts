@@ -13,8 +13,8 @@ export const config = {
   },
   helius: {
     apiKey: required("HELIUS_API_KEY"),
-    publicWebhookUrl: required("PUBLIC_WEBHOOK_URL"),
-    webhookSecret: required("HELIUS_WEBHOOK_SECRET"),
+    wsUrl: process.env.HELIUS_WS_URL || "wss://mainnet.helius-rpc.com",
+    parseTxUrl: process.env.HELIUS_PARSE_TX_URL || "https://api-mainnet.helius-rpc.com/v0/transactions",
   },
   server: {
     port: Number(process.env.PORT || 3000),

@@ -5,13 +5,17 @@ Bot Telegram yang memantau wallet Solana tertentu dan mengirim alert saat wallet
 
 ## Cara kerja
 
-1. **Deteksi on-chain**: setiap wallet yang ditrack didaftarkan sebagai `accountAddresses` di
-   sebuah [Helius](https://helius.dev) enhanced webhook. Setiap transaksi yang menyentuh wallet
-   tersebut dikirim real-time ke endpoint `POST /webhook/helius`.
-2. **Parsing**: transaksi diperiksa untuk instruksi program DAMM v2. Instruksi `create_position`
-   dianggap **OPEN**, instruksi `close_position` dianggap **CLOSE**. Instruksi `add_liquidity` /
-   `remove_liquidity` murni (tanpa create/close) diabaikan karena itu bukan open/close posisi.
-   Account layout diambil langsung dari IDL resmi `cp_amm` (lihat `src/helius/idl.ts`).
+1. **Deteksi on-chain**: proses ini membuka koneksi **WebSocket** ke `wss://mainnet.helius-rpc.com`
+   dan subscribe (`logsSubscribe`) ke semua transaksi yang menyentuh program DAMM v2. Tidak perlu
+   domain/URL publik — koneksinya keluar dari VPS kamu ke Helius, bukan sebaliknya.
+2. **Parsing**: saat ada notifikasi log, signature transaksinya di-batch lalu dikirim ke REST API
+   Helius (`/v0/transactions`) untuk diubah jadi "enhanced transaction" (data terstruktur:
+   balance changes, instruksi, dst). Transaksi diperiksa untuk instruksi program DAMM v2:
+   `create_position` dianggap **OPEN**, `close_position` dianggap **CLOSE**. Instruksi
+   `add_liquidity` / `remove_liquidity` murni (tanpa create/close) diabaikan karena itu bukan
+   open/close posisi. Wallet pemilik posisi dicocokkan ke daftar wallet yang ditrack di database
+   — kalau tidak cocok, event diabaikan. Account layout diambil langsung dari IDL resmi `cp_amm`
+   (lihat `src/helius/idl.ts`).
 3. **Perubahan saldo**: dihitung dari `accountData[].nativeBalanceChange` /
    `tokenBalanceChanges` milik wallet pada transaksi tersebut (data ini sudah disediakan Helius,
    sudah netted).
@@ -40,8 +44,8 @@ Bot Telegram yang memantau wallet Solana tertentu dan mengirim alert saat wallet
 - Node.js 20+
 - Sebuah bot Telegram (buat via [@BotFather](https://t.me/BotFather), ambil token)
 - API key [Helius](https://helius.dev) (free tier cukup untuk mulai)
-- Domain/URL publik HTTPS yang bisa diakses Helius untuk mengirim webhook (contoh: deploy ke
-  Railway/Render/VPS, atau gunakan tunnel seperti `ngrok`/`cloudflared` untuk testing lokal)
+- **Tidak perlu domain atau HTTPS publik** — bot ini hanya butuh koneksi outbound (WebSocket +
+  HTTPS REST) dari server ke Helius/Jupiter/Telegram, bisa jalan di VPS mana pun tanpa DNS/proxy.
 
 ### 2. Install
 
@@ -56,9 +60,7 @@ Isi `.env`:
 - `TELEGRAM_ADMIN_ID` — (opsional) Telegram user ID kamu, supaya hanya kamu yang bisa
   `/addwallet` / `/removewallet`. Kosongkan untuk mengizinkan siapa saja yang chat bot.
 - `HELIUS_API_KEY` — API key Helius
-- `PUBLIC_WEBHOOK_URL` — URL publik ke endpoint `/webhook/helius` (mis. `https://xxx.com/webhook/helius`)
-- `HELIUS_WEBHOOK_SECRET` — string random buatan sendiri, dipakai sebagai `Authorization` header
-  yang divalidasi di endpoint webhook
+- `HELIUS_WS_URL` / `HELIUS_PARSE_TX_URL` — biasanya tidak perlu diubah dari default
 
 ### 3. Jalankan
 
@@ -71,7 +73,7 @@ npm run build && npm start   # production
 ### 4. Pakai bot di Telegram
 
 - `/start` — daftarkan chat ini untuk menerima notifikasi
-- `/addwallet <address> <label>` — mulai memantau wallet (otomatis daftar ke webhook Helius)
+- `/addwallet <address> <label>` — mulai memantau wallet
 - `/removewallet <address>` — berhenti memantau wallet
 - `/listwallets` — lihat semua wallet yang dipantau
 - `/stop` — berhenti menerima notifikasi di chat ini
@@ -87,10 +89,10 @@ Contoh:
 ```
 src/
   config.ts              env vars + konstanta program DAMM v2
-  db/index.ts             SQLite: wallets, chats, positions, kv
+  db/index.ts             SQLite: wallets, chats, positions
   helius/
     idl.ts                 discriminator & account layout instruksi cp_amm (dari IDL resmi)
-    client.ts               create/update Helius webhook sesuai daftar wallet
+    ws.ts                   koneksi WebSocket ke Helius (logsSubscribe) + fetch enhanced tx
     parser.ts               parsing payload enhanced-transaction → DammEvent
   pricing/
     jupiter.ts               harga USD (Jupiter Price API)
@@ -101,7 +103,7 @@ src/
     bot.ts                    command handler + broadcast
     format.ts                  format pesan alert OPEN/CLOSE
   handler.ts                orkestrasi: parse → price → pnl → notify
-  server.ts                 Express app + endpoint webhook
+  server.ts                 Express app (health check saja)
   index.ts                  entrypoint
 ```
 
@@ -111,5 +113,9 @@ src/
   (karena disimpan di SQLite lokal saat event OPEN terdeteksi). Posisi yang sudah ada sebelum
   bot dijalankan akan tetap memicu alert CLOSE, tapi tanpa baris PnL/deposit/fee (karena basis
   tidak diketahui).
-- Satu proses Helius webhook mencakup semua wallet yang ditrack; setiap `/addwallet` /
-  `/removewallet` akan mem-PUT ulang seluruh daftar address ke webhook yang sama.
+- Koneksi WebSocket akan otomatis reconnect kalau putus (retry setiap 5 detik), tapi transaksi
+  yang lewat saat koneksi putus bisa terlewat — jalankan dengan process manager (pm2/systemd)
+  yang auto-restart agar downtime minimal.
+- Subscription bersifat program-wide (semua transaksi DAMM v2 di seluruh Solana), lalu difilter
+  di aplikasi berdasarkan wallet yang ditrack di database — jadi menambah/menghapus wallet via
+  `/addwallet` / `/removewallet` tidak perlu resubscribe apa pun, langsung berlaku.
