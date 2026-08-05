@@ -1,0 +1,78 @@
+import TelegramBot from "node-telegram-bot-api";
+import { config } from "../config";
+import { addWallet, removeWallet, listWallets, addChat, removeChat, listChats } from "../db";
+import { syncWebhookAddresses } from "../helius/client";
+
+export const bot = new TelegramBot(config.telegram.botToken, { polling: true });
+
+function isAllowed(msg: TelegramBot.Message): boolean {
+  if (!config.telegram.adminId) return true;
+  return String(msg.from?.id) === config.telegram.adminId;
+}
+
+async function syncWallets(): Promise<void> {
+  const addresses = listWallets().map((w) => w.address);
+  await syncWebhookAddresses(addresses);
+}
+
+bot.onText(/^\/start$/, (msg) => {
+  addChat(msg.chat.id);
+  bot.sendMessage(
+    msg.chat.id,
+    "DAMM v2 tracker aktif. Kirim /addwallet <address> <label> untuk mulai memantau wallet.\n\nKomando:\n/addwallet <address> <label>\n/removewallet <address>\n/listwallets\n/stop"
+  );
+});
+
+bot.onText(/^\/stop$/, (msg) => {
+  removeChat(msg.chat.id);
+  bot.sendMessage(msg.chat.id, "Notifikasi dimatikan untuk chat ini.");
+});
+
+bot.onText(/^\/addwallet\s+(\S+)\s+(.+)$/, async (msg, match) => {
+  if (!isAllowed(msg)) return bot.sendMessage(msg.chat.id, "Tidak diizinkan.");
+  const address = match![1];
+  const label = match![2].trim();
+  try {
+    addWallet(address, label);
+    addChat(msg.chat.id);
+    await syncWallets();
+    bot.sendMessage(msg.chat.id, `Wallet ditambahkan:\n${label} → ${address}`);
+  } catch (err: any) {
+    bot.sendMessage(msg.chat.id, `Gagal menambahkan wallet: ${err.message}`);
+  }
+});
+
+bot.onText(/^\/addwallet$/, (msg) => {
+  bot.sendMessage(msg.chat.id, "Format: /addwallet <address> <label>");
+});
+
+bot.onText(/^\/removewallet\s+(\S+)$/, async (msg, match) => {
+  if (!isAllowed(msg)) return bot.sendMessage(msg.chat.id, "Tidak diizinkan.");
+  const address = match![1];
+  const removed = removeWallet(address);
+  if (!removed) return bot.sendMessage(msg.chat.id, "Wallet tidak ditemukan.");
+  try {
+    await syncWallets();
+    bot.sendMessage(msg.chat.id, `Wallet dihapus: ${address}`);
+  } catch (err: any) {
+    bot.sendMessage(msg.chat.id, `Wallet dihapus dari DB, tapi gagal sync webhook: ${err.message}`);
+  }
+});
+
+bot.onText(/^\/listwallets$/, (msg) => {
+  const wallets = listWallets();
+  if (wallets.length === 0) return bot.sendMessage(msg.chat.id, "Belum ada wallet yang dipantau.");
+  const text = wallets.map((w) => `• ${w.label} — ${w.address}`).join("\n");
+  bot.sendMessage(msg.chat.id, text);
+});
+
+export async function broadcast(text: string): Promise<void> {
+  const chats = listChats();
+  for (const chatId of chats) {
+    try {
+      await bot.sendMessage(chatId, text, { parse_mode: "Markdown", disable_web_page_preview: true });
+    } catch (err) {
+      console.error(`Failed to send to chat ${chatId}:`, err);
+    }
+  }
+}
