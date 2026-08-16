@@ -1,6 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import { config } from "../config";
 import { addWallet, removeWallet, listWallets, addChat, removeChat, listChats } from "../db";
+import { InlineButton } from "./format";
 
 export const bot = new TelegramBot(config.telegram.botToken, { polling: true });
 
@@ -54,11 +55,12 @@ bot.onText(/^\/listwallets$/, (msg) => {
   bot.sendMessage(msg.chat.id, text);
 });
 
-export async function broadcast(text: string): Promise<void> {
+export async function broadcast(text: string, buttons?: InlineButton[]): Promise<void> {
   const chats = listChats();
+  const reply_markup = buttons ? { inline_keyboard: [buttons.map((b) => ({ text: b.text, url: b.url }))] } : undefined;
   for (const chatId of chats) {
     try {
-      await bot.sendMessage(chatId, text, { parse_mode: "Markdown", disable_web_page_preview: true });
+      await bot.sendMessage(chatId, text, { disable_web_page_preview: true, reply_markup });
     } catch (err) {
       console.error(`Failed to send to chat ${chatId}:`, err);
     }

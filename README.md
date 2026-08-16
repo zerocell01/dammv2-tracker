@@ -24,18 +24,35 @@ Bot Telegram yang memantau wallet Solana tertentu dan mengirim alert saat wallet
    dipersingkat jika token tidak dikenal.
 5. **PnL saat close**: saat OPEN, total USD yang keluar dari wallet dicatat sebagai *deposit
    basis* per alamat posisi (di SQLite). Saat CLOSE, PnL = total USD yang diterima − deposit
-   basis − estimasi fee jaringan.
-6. **Notifikasi**: dikirim ke semua chat Telegram yang sudah `/start` bot ini.
+   basis.
+6. **Notifikasi**: dikirim ke semua chat Telegram yang sudah `/start` bot ini, dengan 3 tombol
+   inline (GMGN, Pool, LPAgent).
 
-> **Catatan penting soal akurasi PnL/fee**: DAMM v2 tidak mengekspos satu angka "fee" tunggal
-> on-chain yang siap pakai. Nilai `fee` pada alert ini adalah estimasi biaya jaringan Solana
-> (bukan model proprietary seperti yang dipakai lpAgent/GMGN), sehingga angka PnL bisa sedikit
-> berbeda dari yang ditampilkan situs lain. Sesuaikan `recordClose` di `src/positions/pnl.ts`
-> bila kamu punya formula fee yang lebih akurat.
+Contoh alert:
+
+```
+🔷 OPEN : MADS -> SILVERINU-SOL
+💵 Deposit : ($96.00) = 1.0000 SOL ($76.00) + 1.0000 SILVERINU ($20.00)
+[ GMGN ] [ Pool ] [ LPAgent ]
+```
+
+```
+🔶 CLOSE : MADS -> SILVERINU-SOL
+💵 Remove : 1.0000 SOL ($76.00) + 1.0000 SILVERINU ($20.00) = $96.00
+📊 PnL: 🟢 +$56.45 (+2099.36%)
+[ GMGN ] [ Pool ] [ LPAgent ]
+```
+
+> **Kenapa tidak ada baris "fee" terpisah**: kalau *claim fee* dan *remove liquidity* terjadi
+> dalam satu transaksi close dan menghasilkan token yang sama, Solana/Helius sudah menggabungkan
+> keduanya jadi satu angka net balance change per token — tidak ada cara andal untuk memisahkan
+> mana "principal" dan mana "fee" dari data on-chain tanpa mensimulasikan state pool. Daripada
+> menampilkan angka fee yang ditebak (berisiko salah/duplikat dengan PnL), baris "Remove"
+> menampilkan total gabungan apa adanya.
 >
-> URL "Porto" (lpAgent portfolio) dan link pool masih berupa template tebakan
-> (`PORTO_URL_TEMPLATE`, `POOL_URL_TEMPLATE` di `.env`) karena format URL asli lpAgent.io tidak
-> bisa dipastikan otomatis — cek manual dan sesuaikan template-nya di `.env`.
+> URL "Porto"/"LPAgent" dan link pool masih berupa template tebakan (`PORTO_URL_TEMPLATE`,
+> `POOL_URL_TEMPLATE` di `.env`) karena format URL asli lpAgent.io tidak bisa dipastikan
+> otomatis — cek manual dan sesuaikan template-nya di `.env`.
 
 ## Setup
 

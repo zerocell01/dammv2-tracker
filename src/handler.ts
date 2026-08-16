@@ -3,7 +3,7 @@ import { HeliusEnhancedTransaction, parseDammEvent } from "./helius/parser";
 import { getTokenSymbol } from "./pricing/metadata";
 import { getSolPrice } from "./pricing/jupiter";
 import { valueBalanceChanges, recordOpen, recordClose } from "./positions/pnl";
-import { formatOpenMessage, formatCloseMessage } from "./telegram/format";
+import { formatOpenMessage, formatCloseMessage, buildButtons } from "./telegram/format";
 import { broadcast } from "./telegram/bot";
 import { WSOL_MINT } from "./config";
 
@@ -57,7 +57,7 @@ async function handleOne(tx: HeliusEnhancedTransaction, trackedWallets: Set<stri
       signature: event.signature,
       timestamp: event.timestamp,
     });
-    await broadcast(text);
+    await broadcast(text, buildButtons(wallet, event.pool));
     return;
   }
 
@@ -74,5 +74,5 @@ async function handleOne(tx: HeliusEnhancedTransaction, trackedWallets: Set<stri
     timestamp: event.timestamp,
     close,
   });
-  await broadcast(text);
+  await broadcast(text, buildButtons(wallet, event.pool));
 }
